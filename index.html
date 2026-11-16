@@ -2034,12 +2034,12 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden&&(state==='
 
 /* ---------- goals, replay and what happens after ---------- */
 function onGoal(team){
- if(team===1){scoreB++;P.stats.goals++;addXP(60);if(mode==='match'){SAVE.credits+=8;save()}}else{scoreO++}
+ if(team===0){scoreB++;P.stats.goals++;addXP(60);if(mode==='match'){SAVE.credits+=8;save()}}else{scoreO++}
  lastKph=Math.round(W.ball.v.len()*3.6);
  state='goal';recFrozen=true;goalT=3.4;timeScale=.25;
  const b=W.ball;splashFx(SAVE.splash,b.p.x,b.p.y,b.p.z);goalBlast(SAVE.splash,b.p.x,b.p.y,b.p.z);
  AUD.goal();playClip(SFX_GOAL,1,splashRate());vib([80,60,120]);
- popup('GOAL!',(team===1?(SAVE.g.name||'YOU')+' SCORED':'OPPONENT SCORED')+' · '+lastKph+' KPH',team===1?'#4aa6ff':'#ff9a3a',true);
+ popup('GOAL!',(team===0?(SAVE.g.name||'YOU')+' SCORED':'OPPONENT SCORED')+' · '+lastKph+' KPH',team===0?'#4aa6ff':'#ff9a3a',true);
 }
 const SPLASH=[
  {id:'default',n:'Classic',p:0,pow:8,d:'Orange and blue burst with a white ring'},
