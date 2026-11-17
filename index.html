@@ -249,7 +249,7 @@ table.st td:last-child,table.st th:last-child{text-align:right}
 </div>
 
 <div id="ui">
-  <div id="scr-main" class="scr view">
+  <div id="scr-main" class="scr view"><button class="mbtn sm" id="signOutBtn" style="position:fixed;left:14px;bottom:14px;z-index:70;background:linear-gradient(180deg,#ff3b3b,#8e0000)!important;border-color:#ff6b6b"><span>SIGN OUT</span></button>
     <div class="logo">Rocket<b>Arena</b></div>
     <div class="menuCol">
       <button class="mbtn" data-go="modes"><span>Play</span></button>
@@ -864,7 +864,56 @@ function load(){
  return r;
 }
 const SAVE=load();const S=SAVE.s;
-function save(){try{localStorage.setItem(SKEY,JSON.stringify(SAVE))}catch(e){}}
+function save(){try{localStorage.setItem(SKEY,JSON.stringify(SAVE))}catch(e){}schedulePush()}
+function schedulePush(){if(!SAVE.sb)return;clearTimeout(schedulePush.t);schedulePush.t=setTimeout(pushProgress,3000)}
+function setSession(j){SAVE.sb={at:j.access_token,rt:j.refresh_token,exp:Date.now()+((j.expires_in||3600)*1000)-60000,uid:j.user.id};try{localStorage.setItem(SKEY,JSON.stringify(SAVE))}catch(e){}}
+async function sbSignIn(idToken){
+ const r=await fetch(SB_URL+'/auth/v1/token?grant_type=id_token',{method:'POST',headers:{'Content-Type':'application/json','apikey':SB_KEY},body:JSON.stringify({provider:'google',id_token:idToken})});
+ if(!r.ok)throw new Error(String(r.status));
+ setSession(await r.json());
+}
+async function sbAccess(){
+ if(!SAVE.sb)throw new Error('nosession');
+ if(Date.now()<SAVE.sb.exp)return SAVE.sb.at;
+ const r=await fetch(SB_URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{'Content-Type':'application/json','apikey':SB_KEY},body:JSON.stringify({refresh_token:SAVE.sb.rt})});
+ if(!r.ok)throw new Error(String(r.status));
+ const j=await r.json();setSession(j);return j.access_token;
+}
+async function pgReq(path,opt){
+ const at=await sbAccess();
+ const o=Object.assign({},opt||{});
+ o.headers=Object.assign({'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+at},o.headers||{});
+ const r=await fetch(SB_URL+'/rest/v1/'+path,o);
+ if(!r.ok)throw new Error(String(r.status));
+ const t=await r.text();return t?JSON.parse(t):null;
+}
+function progSnap(){const c=Object.assign({},SAVE);delete c.sb;delete c.syncAt;const g=Object.assign({},c.g||{});delete g.googleId;delete g.signinAsked;c.g=g;return c}
+async function pushProgress(){
+ if(!SAVE.sb||!SAVE.g||!SAVE.g.googleId)return;
+ const now=new Date().toISOString();
+ try{
+  await pgReq('progress',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},body:JSON.stringify({user_id:SAVE.sb.uid,data:progSnap(),updated_at:now})});
+  SAVE.syncAt=now;try{localStorage.setItem(SKEY,JSON.stringify(SAVE))}catch(e){}
+ }catch(e){}
+}
+async function pullProgress(){
+ if(!SAVE.sb)return;
+ try{
+  const rows=await pgReq('progress?select=data,updated_at');
+  if(!rows||!rows.length){await pushProgress();return}
+  const row=rows[0];
+  if(new Date(row.updated_at)>new Date(SAVE.syncAt||0)){
+   const keepG=SAVE.g||{},keepSb=SAVE.sb;
+   const d=Object.assign({},row.data||{});
+   delete d.sb;
+   d.g=Object.assign({},d.g||{},{googleId:keepG.googleId,signinAsked:true});
+   d.sb=keepSb;d.syncAt=row.updated_at;
+   localStorage.setItem(SKEY,JSON.stringify(d));
+   location.reload();
+  }
+ }catch(e){}
+}
+
 
 /* ================= THREE SETUP ================= */
 const canvas=$('c');
@@ -2847,7 +2896,7 @@ requestAnimationFrame(t=>{last=t;frame(t)});
    if(window.google&&google.accounts&&google.accounts.id){
     google.accounts.id.initialize({client_id:GID,callback:r=>{
      try{const p=JSON.parse(decodeURIComponent(escape(atob(r.credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')))));SAVE.g.googleId=p.sub;save()}catch(e){}
-     done()}});
+     sbSignIn(r.credential).then(()=>pullProgress()).catch(()=>{}).then(done)}});
     google.accounts.id.renderButton(document.getElementById('gBtn'),{theme:'filled_blue',size:'large',text:'signin_with',width:260});
    }else if(n>0)setTimeout(()=>tryInit(n-1),200);
   };
@@ -2857,6 +2906,13 @@ requestAnimationFrame(t=>{last=t;frame(t)});
  askSignIn();
 })();
 if($('lvFind'))$('lvFind').onclick=findLevelCode;
+$('signOutBtn').onclick=()=>{
+ if(!confirm('Sign out? This resets progress on this phone and unlinks your Google account. Your cloud progress is kept, so signing in again brings it back.'))return;
+ try{google.accounts.id.disableAutoSelect()}catch(e){}
+ try{localStorage.removeItem(SKEY)}catch(e){}
+ location.reload();
+};
+if(SAVE.sb&&SAVE.g&&SAVE.g.googleId)pullProgress();
 })();
 
 </script>
