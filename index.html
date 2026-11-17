@@ -2878,7 +2878,6 @@ $('mkName').oninput=e=>{mkLv.name=e.target.value.slice(0,24)};
 requestAnimationFrame(t=>{last=t;frame(t)});
 (function firstLaunch(){
  SAVE.g=SAVE.g||{};
- const GID='468593781099-58bgq8eudpqkc83dq6d7piu8q1r3n605.apps.googleusercontent.com';
  const box=html=>{const o=document.createElement('div');o.style.cssText='position:fixed;inset:0;z-index:999;background:rgba(5,8,20,.94);display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;color:#fff';o.innerHTML='<div style="text-align:center;padding:24px;max-width:90vw">'+html+'</div>';document.body.appendChild(o);return o};
  const askName=()=>{
   if(SAVE.g.nameLocked&&SAVE.g.name)return;
@@ -2888,31 +2887,42 @@ requestAnimationFrame(t=>{last=t;frame(t)});
   document.getElementById('gateOk').onclick=go;
   document.getElementById('gateName').onkeydown=e=>{if(e.key==='Enter')go()};
  };
+ const finish=()=>{if(SAVE.g.nameLocked&&SAVE.g.name)return;askName()};
  const askSignIn=()=>{
-  if(SAVE.g.googleId||SAVE.g.signinAsked){askName();return}
-  SAVE.g.signinAsked=true;save();
-  const o=box('<h2 style="font-style:italic;font-weight:900;margin:0 0 8px">SIGN IN TO SAVE PROGRESS</h2><p style="opacity:.75;margin:0 0 16px">Sign in with Google to tie your progress to your account.</p><div id="gBtn" style="display:flex;justify-content:center;min-height:44px"></div><button id="gSkip" class="mbtn" style="margin-top:16px"><span>Not now</span></button>');
-  const done=()=>{o.remove();askName()};
-  document.getElementById('gSkip').onclick=done;
-  const tryInit=n=>{
-   if(window.google&&google.accounts&&google.accounts.id){
-    google.accounts.id.initialize({client_id:GID,callback:r=>{
-     try{const p=JSON.parse(decodeURIComponent(escape(atob(r.credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')))));SAVE.g.googleId=p.sub;save()}catch(e){}
-     sbSignIn(r.credential).then(()=>pullProgress()).catch(()=>false).then(reloading=>{if(!reloading)done()})}});
-    google.accounts.id.renderButton(document.getElementById('gBtn'),{theme:'filled_blue',size:'large',text:'signin_with',width:260});
-   }else if(n>0)setTimeout(()=>tryInit(n-1),200);
-  };
-  tryInit(50);
+  const o=box('<h2 style="font-style:italic;font-weight:900;margin:0 0 8px">SIGN IN TO SAVE PROGRESS</h2><p style="opacity:.75;margin:0 0 18px">Your progress syncs to your Google account.</p><button id="gSignIn" class="mbtn o" style="padding:12px 24px"><span>CONTINUE WITH GOOGLE</span></button><br><button id="gSkip" class="mbtn" style="margin-top:16px"><span>Not now</span></button>');
+  document.getElementById('gSkip').onclick=()=>{o.remove();finish()};
+  document.getElementById('gSignIn').onclick=()=>{location.href=SB_URL+'/auth/v1/authorize?provider=google&redirect_to='+encodeURIComponent(location.origin+location.pathname)};
  };
- if(SAVE.g.nameLocked&&SAVE.g.name)return;
- askSignIn();
+ const handleReturn=async()=>{
+  if(!location.hash||location.hash.indexOf('access_token=')<0)return false;
+  const p=new URLSearchParams(location.hash.slice(1));
+  const at=p.get('access_token'),rt=p.get('refresh_token'),exp=+p.get('expires_in')||3600;
+  history.replaceState(null,'',location.pathname+location.search);
+  try{
+   const r=await fetch(SB_URL+'/auth/v1/user',{headers:{'apikey':SB_KEY,'Authorization':'Bearer '+at}});
+   if(!r.ok)return false;
+   const u=await r.json();
+   SAVE.g.googleId=u.id;SAVE.g.signinAsked=true;
+   setSession({access_token:at,refresh_token:rt,expires_in:exp,user:{id:u.id}});
+   return true;
+  }catch(e){return false}
+ };
+ (async()=>{
+  if(await handleReturn()){const reloading=await pullProgress();if(!reloading)finish();return}
+  if(SAVE.g.nameLocked&&SAVE.g.name)return;
+  if(SAVE.g.googleId||SAVE.g.signinAsked){finish();return}
+  SAVE.g.signinAsked=true;save();
+  askSignIn();
+ })();
 })();
 if($('lvFind'))$('lvFind').onclick=findLevelCode;
 const doSignOut=()=>{
- if(!confirm('Sign out? This resets progress on this phone and unlinks your Google account. Your cloud progress is kept, so signing in again brings it back.'))return;
- try{google.accounts.id.disableAutoSelect()}catch(e){}
- try{localStorage.removeItem(SKEY)}catch(e){}
- location.reload();
+ const o=document.createElement('div');
+ o.style.cssText='position:fixed;inset:0;z-index:1000;background:rgba(5,8,20,.85);display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;color:#fff';
+ o.innerHTML='<div style="text-align:center;padding:22px;max-width:86vw;background:#0d1530;border:1px solid #2a4a8a;border-radius:14px;box-shadow:0 0 30px rgba(40,140,255,.35)"><h3 style="font-style:italic;font-weight:900;margin:0 0 8px">SIGN OUT?</h3><p style="opacity:.8;margin:0 0 16px;max-width:300px">Progress on this phone will be cleared. Your cloud progress is kept, so signing in again brings it back.</p><button id="soYes" class="mbtn" style="background:linear-gradient(180deg,#ff3b3b,#8e0000)!important;margin-right:8px"><span>SIGN OUT</span></button><button id="soNo" class="mbtn"><span>CANCEL</span></button></div>';
+ document.body.appendChild(o);
+ document.getElementById('soNo').onclick=()=>o.remove();
+ document.getElementById('soYes').onclick=()=>{try{localStorage.removeItem(SKEY)}catch(e){}location.reload()};
 };
 $('signOutBtn').onclick=doSignOut;if($('signOutBtn2'))$('signOutBtn2').onclick=doSignOut;
 if(SAVE.sb&&SAVE.g&&SAVE.g.googleId)pullProgress();
