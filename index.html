@@ -249,7 +249,7 @@ table.st td:last-child,table.st th:last-child{text-align:right}
 </div>
 
 <div id="ui">
-  <div id="scr-main" class="scr view"><button class="mbtn sm" id="signOutBtn" style="position:fixed;left:14px;bottom:14px;z-index:70;background:linear-gradient(180deg,#ff3b3b,#8e0000)!important;border-color:#ff6b6b"><span>SIGN OUT</span></button>
+  <div id="scr-main" class="scr view"><button class="mbtn sm" id="signOutBtn" style="position:fixed;right:14px;bottom:14px;z-index:70;background:linear-gradient(180deg,#ff3b3b,#8e0000)!important;border-color:#ff6b6b"><span>SIGN OUT</span></button>
     <div class="logo">Rocket<b>Arena</b></div>
     <div class="menuCol">
       <button class="mbtn" data-go="modes"><span>Play</span></button>
@@ -357,7 +357,7 @@ table.st td:last-child,table.st th:last-child{text-align:right}
     <div class="btnrow"><button class="mbtn sm o" data-go="main"><span>Back</span></button><button class="mbtn sm" id="resetStats"><span>Reset data</span></button></div>
   </div></div>
 
-  <div id="scr-opts" class="scr dim"><div class="panel">
+  <div id="scr-opts" class="scr dim"><div class="panel"><div style="display:flex;justify-content:center;margin:0 0 12px"><button class="mbtn sm" id="signOutBtn2" style="background:linear-gradient(180deg,#ff3b3b,#8e0000)!important;border-color:#ff6b6b"><span>SIGN OUT</span></button></div>
     <h2>Options</h2>
     <div class="tabs" id="optTabs"></div>
     <div class="scroll" id="optBody"></div>
@@ -857,7 +857,7 @@ const DEF={
 function load(){
  let o={};try{o=JSON.parse(localStorage.getItem(SKEY))||{}}catch(e){}
  const m=(d,s)=>{const r={};for(const k in d){const dv=d[k];r[k]=(dv&&typeof dv==='object'&&!Array.isArray(dv))?m(dv,(s&&s[k])||{}):(s&&k in s?s[k]:dv)}return r};
- const r=m(DEF,o);r.g=Object.assign({},r.g,o.g||{});r.published=o.published||{};r.favs=o.favs||{};r.st.hist=Array.isArray(o.st&&o.st.hist)?o.st.hist.slice(0,20):[];
+ const r=m(DEF,o);r.g=Object.assign({},r.g,o.g||{});r.published=o.published||{};r.favs=o.favs||{};r.sb=o.sb||null;r.syncAt=o.syncAt||null;r.st.hist=Array.isArray(o.st&&o.st.hist)?o.st.hist.slice(0,20):[];
  if(o.st&&o.st.xp==null)r.st.xp=(r.st.goals||0)*50+(r.st.wins||0)*100+(r.st.played||0)*25;
  if(!o.s||!o.s.mig2){r.s.auto=false;r.s.mig2=true}
  if(!Array.isArray(r.packs))r.packs=[];
@@ -897,10 +897,10 @@ async function pushProgress(){
  }catch(e){}
 }
 async function pullProgress(){
- if(!SAVE.sb)return;
+ if(!SAVE.sb)return false;
  try{
   const rows=await pgReq('progress?select=data,updated_at');
-  if(!rows||!rows.length){await pushProgress();return}
+  if(!rows||!rows.length){await pushProgress();return false}
   const row=rows[0];
   if(new Date(row.updated_at)>new Date(SAVE.syncAt||0)){
    const keepG=SAVE.g||{},keepSb=SAVE.sb;
@@ -910,8 +910,10 @@ async function pullProgress(){
    d.sb=keepSb;d.syncAt=row.updated_at;
    localStorage.setItem(SKEY,JSON.stringify(d));
    location.reload();
+   return true;
   }
- }catch(e){}
+  return false;
+ }catch(e){return false}
 }
 
 
@@ -2896,7 +2898,7 @@ requestAnimationFrame(t=>{last=t;frame(t)});
    if(window.google&&google.accounts&&google.accounts.id){
     google.accounts.id.initialize({client_id:GID,callback:r=>{
      try{const p=JSON.parse(decodeURIComponent(escape(atob(r.credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')))));SAVE.g.googleId=p.sub;save()}catch(e){}
-     sbSignIn(r.credential).then(()=>pullProgress()).catch(()=>{}).then(done)}});
+     sbSignIn(r.credential).then(()=>pullProgress()).catch(()=>false).then(reloading=>{if(!reloading)done()})}});
     google.accounts.id.renderButton(document.getElementById('gBtn'),{theme:'filled_blue',size:'large',text:'signin_with',width:260});
    }else if(n>0)setTimeout(()=>tryInit(n-1),200);
   };
@@ -2906,12 +2908,13 @@ requestAnimationFrame(t=>{last=t;frame(t)});
  askSignIn();
 })();
 if($('lvFind'))$('lvFind').onclick=findLevelCode;
-$('signOutBtn').onclick=()=>{
+const doSignOut=()=>{
  if(!confirm('Sign out? This resets progress on this phone and unlinks your Google account. Your cloud progress is kept, so signing in again brings it back.'))return;
  try{google.accounts.id.disableAutoSelect()}catch(e){}
  try{localStorage.removeItem(SKEY)}catch(e){}
  location.reload();
 };
+$('signOutBtn').onclick=doSignOut;if($('signOutBtn2'))$('signOutBtn2').onclick=doSignOut;
 if(SAVE.sb&&SAVE.g&&SAVE.g.googleId)pullProgress();
 })();
 
