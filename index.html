@@ -304,7 +304,7 @@ table.st td:last-child,table.st th:last-child{text-align:right}
         <div><b id="rankName" style="font-size:20px">Bronze I</b><div id="rankSub" style="font-size:13px;opacity:.8"></div></div>
       </div>
       <div id="mmGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px"></div>
-      <div id="mmPriv" style="display:none;text-align:center;margin-top:10px"><button class="mbtn sm" id="pvCreate"><span>CREATE ROOM</span></button><div id="pvShow" style="font-size:26px;font-weight:900;letter-spacing:6px;margin-top:8px;min-height:32px"></div><div style="margin-top:8px"><input id="pvCode" maxlength="5" placeholder="CODE" style="text-transform:uppercase;padding:8px;width:130px;font-weight:800;letter-spacing:3px;text-align:center"> <button class="mbtn sm" id="pvJoin"><span>JOIN</span></button></div></div>
+      <div id="mmSub" style="margin-top:12px"></div>
       <div id="mmStatus" style="text-align:center;color:#9fd0ff;min-height:22px;margin-top:10px"></div>
       <div style="text-align:center;margin-top:8px"><button class="mbtn sm" id="mmFree" style="display:none"><span>Free Play while you wait</span></button></div>
     </div>
@@ -705,14 +705,14 @@ function kickoff(W){
 }
 function stepWorld(W,dt){
  const cars=W.cars;
- if(NET)netApply(W,dt);
+ if(window.NET)window.netApply(W,dt);
  for(const c of cars){
   if(c.demo>0){c.demo-=dt;if(c.demo<=0&&W.respawn)W.respawn(c)}
   if(!c.remote)stepCar(c,W,dt);
   // Heatseeker midfield barrier: cars stay in their own half, only the ball crosses
   if(W.heat||W.barrier){const lim=W.barrier?-(HZ+0.05):0;if(c.team===0&&c.p.z>lim){const hv=c.v.z;c.p.z=lim;if(W.barrier&&hv>0){c.v.z=-hv*0.2;if(W.onBump)W.onBump(c,hv)}else if(c.v.z>0)c.v.z=0}else if(c.team===1&&c.p.z<0){c.p.z=0;if(c.v.z<0)c.v.z=0}}
  }
- if(!NET||NET.host)stepBall(W.ball,dt);
+ if(!window.NET||window.NET.host)stepBall(W.ball,dt);
  for(const c of cars)carBall(c,W);
  for(let i=0;i<cars.length;i++)for(let j=i+1;j<cars.length;j++)carCar(cars[i],cars[j],W);
  for(const pd of W.pads){
@@ -2248,8 +2248,8 @@ function afterGoal(){
  kickoff(W);state='countdown';cd=3.99;lastCd=-1;timeScale=1;CS.init=false;
 }
 function rankResult(){
- if(!NET||NET.kind!=='Ranked'||NET.scored||NET.host===undefined)return;
- NET.scored=true;
+ if(!window.NET||window.NET.kind!=='Ranked'||window.NET.scored||window.NET.host===undefined)return;
+ window.NET.scored=true;
  const won=scoreB>scoreO,lost=scoreB<scoreO;
  const g=SAVE.g;let d=g.rankDiv||0,p=g.rankPts||0;
  if(won){p+=20;if(p>=100){if(d<2){d++;p=0}else p=100}}
@@ -2528,7 +2528,7 @@ function findOnline(onStatus,kind,onMatched,opts){
  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}
   if(m.type==='code'){if(opts.onCode)opts.onCode(m.code);onStatus('Room code: '+m.code+' · waiting for your friend...')}
   if(m.type==='error'){onStatus(m.msg);done=true;try{ws.close()}catch(x){}}
-  if(m.type==='matched'){done=true;clearTimeout(t);if(onMatched)onMatched(ws,m.host);else onStatus('Match found.');}
+  if(m.type==='matched'){done=true;clearTimeout(t);if(onMatched)onMatched(ws,m.host,m.map);else onStatus('Match found.');}
   if(m.type==='left'){onStatus('Opponent left.')}
  };
  ws.onerror=()=>{if(!done)onStatus('Connection failed. Check your internet and try again.')};
@@ -2574,40 +2574,62 @@ function privCreate(){
  if(!SAVE.g||!SAVE.g.googleId){st.textContent='Sign in with Google to play private matches.';return}
  if(privStop){privStop();privStop=null;$('pvShow').textContent='';st.textContent='Room closed.';return}
  $('pvShow').textContent='';
- privStop=findOnline(m=>{st.textContent=m;if(/failed|closed|Opponent left|No room|Cannot/.test(m)){privStop=null}},'Private',(ws,host)=>{privStop=null;$('pvShow').textContent='';st.textContent='Friend joined, starting...';startOnlineMatch(ws,host,THEMES[Math.floor(Math.random()*THEMES.length)].n,'Private')},{action:'create',onCode:c=>{$('pvShow').textContent=c}});
+ privStop=findOnline(m=>{st.textContent=m;if(/failed|closed|Opponent left|No room|Cannot/.test(m)){privStop=null}},'Private',(ws,host,srvMap)=>{privStop=null;$('pvShow').textContent='';st.textContent='Friend joined, starting...';startOnlineMatch(ws,host,srvMap,'Private')},{action:'create',onCode:c=>{$('pvShow').textContent=c}});
 }
 function privJoin(){
  const st=$('mmStatus');const code=($('pvCode').value||'').toUpperCase().trim();
  if(!SAVE.g||!SAVE.g.googleId){st.textContent='Sign in with Google to play private matches.';return}
  if(code.length<5){st.textContent='Enter the 5-letter room code.';return}
  if(privStop){privStop();privStop=null}
- privStop=findOnline(m=>{st.textContent=m;if(/failed|closed|No room|Cannot/.test(m)){privStop=null}},'Private',(ws,host)=>{privStop=null;st.textContent='Joined, starting...';startOnlineMatch(ws,host,THEMES[Math.floor(Math.random()*THEMES.length)].n,'Private')},{action:'join',code});
+ privStop=findOnline(m=>{st.textContent=m;if(/failed|closed|No room|Cannot/.test(m)){privStop=null}},'Private',(ws,host,srvMap)=>{privStop=null;st.textContent='Joined, starting...';startOnlineMatch(ws,host,srvMap,'Private')},{action:'join',code});
 }
+const MM_MODES=[
+ {id:'ai',n:'VS AI',d:'Practice against a bot',c:'#ff8a1f'},
+ {id:'unr',n:'UNRANKED',d:'Casual online match',c:'#2a7bff'},
+ {id:'rk',n:'RANKED',d:'Climb the ranks',c:'#7a4bff'},
+ {id:'pv',n:'PRIVATE',d:'Play with a friend',c:'#1fbf8f'}];
+let mmOpen=null;
 function buildMatches(){
+ if(!$('mmCss')){const st=document.createElement('style');st.id='mmCss';st.textContent='@keyframes mmIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}';document.head.appendChild(st)}
  const d=rdiv();const ic=$('rankIcon');
  if(ic){const x=ic.getContext('2d');x.clearRect(0,0,120,120);x.drawImage(rankIcon(d),0,0,120,120)}
  $('rankName').textContent=RANK_DIVS[d];
  $('rankSub').textContent='Points: '+((SAVE.g&&SAVE.g.rankPts)||0)+' / 100';
- const grid=$('mmGrid');grid.innerHTML='';
- const items=[
-  ['VS AI',()=>{buildPlay();showScreen('play')}],
-  ['UNRANKED',()=>queueMatch('Unranked')],
-  ['RANKED',()=>queueMatch('Ranked')],
-  ['PRIVATE MATCH',()=>togglePriv()]];
- items.forEach(([n,fn])=>{const b=document.createElement('button');b.className='mbtn';b.innerHTML='<span>'+n+'</span>';b.onclick=()=>{AUD.init();fn()};grid.appendChild(b)});
  if(ic)ic.onclick=()=>{ic.animate&&ic.animate([{transform:'scale(1)'},{transform:'scale(1.15) rotate(-6deg)'},{transform:'scale(1)'}],{duration:450})};
- const fb=$('mmFree');if(fb)fb.onclick=()=>{buildFree();showScreen('free')};
- const pc=$('pvCreate'),pj=$('pvJoin');if(pc)pc.onclick=()=>{AUD.init();privCreate()};if(pj)pj.onclick=()=>{AUD.init();privJoin()};
+ const grid=$('mmGrid');grid.innerHTML='';
+ MM_MODES.forEach(m=>{
+  const t=document.createElement('div');
+  t.style.cssText='border-radius:16px;padding:14px;background:linear-gradient(135deg,'+m.c+',#0a1430);border:2px solid '+(mmOpen===m.id?'#fff':'rgba(255,255,255,.25)')+';cursor:pointer;color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.35);transition:transform .15s;user-select:none';
+  t.innerHTML='<div style="font-weight:900;font-size:17px;letter-spacing:1px">'+m.n+'</div><div style="font-size:12px;opacity:.9;margin-top:6px">'+m.d+'</div><div style="margin-top:10px;font-weight:800;font-size:12px">'+(mmOpen===m.id?'▲ CLOSE':'▼ OPEN')+'</div>';
+  t.onpointerdown=()=>{t.style.transform='scale(.96)'};
+  t.onpointerup=t.onpointerleave=()=>{t.style.transform=''};
+  t.onclick=()=>{AUD.init();AUD.tone(600,760,.05,'sine',.08);mmOpen=mmOpen===m.id?null:m.id;buildMatches()};
+  grid.appendChild(t);
+ });
+ if(mmOpen)buildSub(mmOpen);else{const b=$('mmSub');if(b)b.innerHTML=''}
+}
+function buildSub(id){
+ const box=$('mmSub');if(!box)return;box.innerHTML='';
+ const card=html=>{const d=document.createElement('div');d.style.cssText='background:rgba(10,20,48,.9);border:2px solid rgba(255,255,255,.2);border-radius:16px;padding:14px;text-align:center;animation:mmIn .25s ease-out';d.innerHTML=html;box.appendChild(d);return d};
+ const btn=(txt,fn)=>{const b=document.createElement('button');b.className='mbtn sm';b.innerHTML='<span>'+txt+'</span>';b.onclick=()=>{AUD.init();AUD.tone(640,820,.05,'sine',.1);fn()};return b};
+ if(id==='ai'){const d=card('<div style="font-weight:800;margin-bottom:6px">VS AI</div><div style="opacity:.8;font-size:13px">Choose difficulty, match length and arena in the setup.</div>');d.appendChild(btn('OPEN SETUP',()=>{buildPlay();showScreen('play')}))}
+ else if(id==='unr'||id==='rk'){const rk=id==='rk';const pts=(SAVE.g&&SAVE.g.rankPts)||0;
+  const d=card(rk?'<div style="font-weight:800">RANKED</div><div style="margin:8px auto 4px;width:80%;height:10px;border-radius:6px;background:#1b2a4f;overflow:hidden"><div style="height:100%;width:'+pts+'%;background:linear-gradient(90deg,#7a4bff,#c9a6ff)"></div></div><div style="font-size:12px">'+pts+' / 100 points</div>':'<div style="font-weight:800">UNRANKED</div><div style="font-size:13px;opacity:.85">Casual match. Your rank does not change.</div>');
+  d.appendChild(btn('FIND '+(rk?'RANKED':'UNRANKED')+' MATCH',()=>queueMatch(rk?'Ranked':'Unranked')));
+  const s2=document.createElement('div');s2.style.cssText='margin-top:8px;font-size:12px;color:#9fd0ff';s2.textContent='The server picks the map when you are paired.';d.appendChild(s2)}
+ else if(id==='pv'){const d=card('<div style="font-weight:800">PRIVATE MATCH</div><div style="font-size:13px;opacity:.85;margin-top:4px">Create a room and send the code, or join with a code.</div><div id="pvShow" style="font-size:28px;font-weight:900;letter-spacing:6px;margin:10px 0;min-height:34px"></div>');
+  d.appendChild(btn('CREATE ROOM',()=>privCreate()));
+  const row=document.createElement('div');row.style.cssText='margin-top:10px;display:flex;gap:8px;justify-content:center;align-items:center';
+  row.innerHTML='<input id="pvCode" maxlength="5" placeholder="CODE" style="text-transform:uppercase;padding:8px;width:130px;font-weight:800;letter-spacing:3px;text-align:center;border-radius:10px;border:2px solid #1fbf8f;background:#0a1430;color:#fff">';
+  row.appendChild(btn('JOIN',()=>privJoin()));d.appendChild(row)}
 }
 let mmStop=null;
 function queueMatch(kind){
  const st=$('mmStatus'),fb=$('mmFree');
  if(!SAVE.g||!SAVE.g.googleId){st.textContent='Sign in with Google to play '+kind+' matches.';return}
  if(mmStop){mmStop();mmStop=null;st.textContent='Search cancelled.';if(fb)fb.style.display='none';return}
- const map=THEMES[Math.floor(Math.random()*THEMES.length)].n;
  if(fb)fb.style.display='';
- mmStop=findOnline(m=>{st.textContent=kind+' · '+map+' map (random) · '+m;
-   if(/failed|closed|too long|Cannot/.test(m)){mmStop=null;if(fb)fb.style.display='none'}},kind,(ws,host)=>{mmStop=null;if(fb)fb.style.display='none';st.textContent=kind+' · '+map+' map · Match found, starting...';startOnlineMatch(ws,host,map,kind)});
+ mmStop=findOnline(m=>{st.textContent=kind+' · '+m;if(/failed|closed|too long|Cannot/.test(m)){mmStop=null;if(fb)fb.style.display='none'}},kind,(ws,host,srvMap)=>{mmStop=null;if(fb)fb.style.display='none';st.textContent=kind+' · '+srvMap+' map (chosen by server) · starting...';startOnlineMatch(ws,host,srvMap,kind)});
 }
 function mkTag(txt,ai){
  const c=document.createElement('canvas');c.width=256;c.height=64;const g=c.getContext('2d');
@@ -2619,18 +2641,19 @@ function mkTag(txt,ai){
 function addTag(o){if(!o||!o.g||o.tag)return;o.tag=mkTag(o.ai?'BOT':((SAVE.g&&SAVE.g.name)||'YOU'),!!o.ai);o.g.add(o.tag)}
 document.addEventListener('click',e=>{if(e.target.closest('button,.mcard,.chip,select')){try{AUD.init();AUD.tone(640,820,.04,'sine',.08)}catch(x){}}},true);
 
-var NET=null;
+window.NET=null;
 function netPk(v){return [+v.x.toFixed(3),+v.y.toFixed(3),+v.z.toFixed(3)]}
 function netSend(){
- if(!NET||!NET.ws||NET.ws.readyState!==1||!P||!W)return;
+ if(!window.NET||!window.NET.ws||window.NET.ws.readyState!==1||!P||!W)return;
  const c=P,data={n:(SAVE.g&&SAVE.g.name)||'PLAYER',c:{p:netPk(c.p),v:netPk(c.v),F:netPk(c.F),U:netPk(c.U),R:netPk(c.R),bo:!!c.boosting,g:!!c.grounded}};
- if(NET.host){if(W.ball)data.b={p:netPk(W.ball.p),v:netPk(W.ball.v)};data.sc=[scoreB,scoreO];data.clk=clock}
- NET.ws.send(JSON.stringify({type:'state',data}));
+ if(window.NET.host){if(W.ball)data.b={p:netPk(W.ball.p),v:netPk(W.ball.v)};data.sc=[scoreB,scoreO];data.clk=clock}
+ window.NET.ws.send(JSON.stringify({type:'state',data}));
 }
 setInterval(netSend,66);
 function netApply(W,dt){
- if(!NET||!NET.buf||!NET.buf.length)return;
- const buf=NET.buf,tt=performance.now()-110;
+ if(!window.NET||!window.NET.buf||!window.NET.buf.length)return;
+ const tb=document.getElementById('tagBot');if(tb)tb.style.display='none';
+ const buf=window.NET.buf,tt=performance.now()-110;
  let a=buf[0],b=buf[0],f=0;
  if(tt>=buf[buf.length-1].t){a=b=buf[buf.length-1]}
  else for(let i=buf.length-1;i>0;i--){if(buf[i-1].t<=tt){a=buf[i-1];b=buf[i];f=(tt-a.t)/Math.max(1,b.t-a.t);break}}
@@ -2640,30 +2663,31 @@ function netApply(W,dt){
   rc.p.set(L(ca.p[0],cb.p[0]),L(ca.p[1],cb.p[1]),L(ca.p[2],cb.p[2]));
   rc.v.set(ca.v[0],ca.v[1],ca.v[2]);rc.F.set(ca.F[0],ca.F[1],ca.F[2]);rc.U.set(ca.U[0],ca.U[1],ca.U[2]);rc.R.set(ca.R[0],ca.R[1],ca.R[2]);
   rc.boosting=!!ca.bo;rc.grounded=!!ca.g}
- if(!NET.host&&a.b&&b.b){const ball=W.ball;
+ if(!window.NET.host&&a.b&&b.b){const ball=W.ball;
   ball.p.set(L(a.b.p[0],b.b.p[0]),L(a.b.p[1],b.b.p[1]),L(a.b.p[2],b.b.p[2]));
   ball.v.set(a.b.v[0],a.b.v[1],a.b.v[2])}
- if(!NET.host&&NET.hs){clock=NET.hs.clk;scoreB=NET.hs.sc[1];scoreO=NET.hs.sc[0]}
- if(a.n&&NET.name!==a.n){NET.name=a.n;const o=carObjs[1];if(o&&o.g){if(o.tag)o.g.remove(o.tag);o.tag=mkTag(a.n,false);o.g.add(o.tag)}}
+ if(!window.NET.host&&window.NET.hs){clock=window.NET.hs.clk;scoreB=window.NET.hs.sc[1];scoreO=window.NET.hs.sc[0]}
+ if(a.n&&window.NET.name!==a.n){window.NET.name=a.n;const o=carObjs[1];if(o&&o.g){if(o.tag)o.g.remove(o.tag);o.tag=mkTag(a.n,false);o.g.add(o.tag)}}
 }
+window.netApply=netApply;
 function netStop(){
- if(!NET)return;const ws=NET.ws;NET=null;try{ws&&ws.close()}catch(e){}
+ if(!window.NET)return;const ws=window.NET.ws;window.NET=null;try{ws&&ws.close()}catch(e){}
 }
 function startOnlineMatch(ws,host,map,kind){
  netStop();
- NET={ws,host,buf:[],hs:null,name:null,gone:false,kind:kind||'Unranked',scored:false};
- const prev=SAVE.last.size;SAVE.last.size=1;
- try{startGame('match')}finally{SAVE.last.size=prev}
+ window.NET={ws,host,buf:[],hs:null,name:null,gone:false,kind:kind||'Unranked',scored:false};
+ const prev=SAVE.last.size,prevT=SAVE.last.theme;SAVE.last.size=1;SAVE.last.theme=Math.max(0,THEMES.findIndex(t=>t.n===map));
+ try{startGame('match')}finally{SAVE.last.size=prev;SAVE.last.theme=prevT}
  const rc=W.cars[1];
  if(rc){rc.remote=true;rc.ai=null;rc.assist=false}
  const o=carObjs[1];if(o&&o.g){if(o.tag)o.g.remove(o.tag);o.tag=mkTag('OPPONENT',false);o.g.add(o.tag)}
  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}
-  if(!NET||NET.ws!==ws)return;
-  if(m.type==='state'){const d=m.data;NET.buf.push({t:performance.now(),c:d.c,b:d.b,n:d.n});if(NET.buf.length>60)NET.buf.shift();
-    if(!NET.host&&d.sc)NET.hs={sc:d.sc,clk:d.clk}}
-  if(m.type==='left'){NET.gone=true;popup('OPPONENT LEFT','','#ff8a1f',true)}
+  if(!window.NET||window.NET.ws!==ws)return;
+  if(m.type==='state'){const d=m.data;window.NET.buf.push({t:performance.now(),c:d.c,b:d.b,n:d.n});if(window.NET.buf.length>60)window.NET.buf.shift();
+    if(!window.NET.host&&d.sc)window.NET.hs={sc:d.sc,clk:d.clk}}
+  if(m.type==='left'){window.NET.gone=true;popup('OPPONENT LEFT','','#ff8a1f',true)}
  };
- ws.onclose=()=>{if(NET&&NET.ws===ws){NET.gone=true;popup('CONNECTION LOST','','#ff5a5a',true)}};
+ ws.onclose=()=>{if(window.NET&&window.NET.ws===ws){window.NET.gone=true;popup('CONNECTION LOST','','#ff5a5a',true)}};
  ws.onerror=()=>{};
 }
 function buildPlay(){
