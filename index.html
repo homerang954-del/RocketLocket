@@ -712,7 +712,7 @@ function stepWorld(W,dt){
   // Heatseeker midfield barrier: cars stay in their own half, only the ball crosses
   if(W.heat||W.barrier){const lim=W.barrier?-(HZ+0.05):0;if(c.team===0&&c.p.z>lim){const hv=c.v.z;c.p.z=lim;if(W.barrier&&hv>0){c.v.z=-hv*0.2;if(W.onBump)W.onBump(c,hv)}else if(c.v.z>0)c.v.z=0}else if(c.team===1&&c.p.z<0){c.p.z=0;if(c.v.z<0)c.v.z=0}}
  }
- if(!window.NET||window.NET.host)stepBall(W.ball,dt);
+ stepBall(W.ball,dt);
  for(const c of cars)carBall(c,W);
  for(let i=0;i<cars.length;i++)for(let j=i+1;j<cars.length;j++)carCar(cars[i],cars[j],W);
  for(const pd of W.pads){
@@ -2638,7 +2638,7 @@ function mkTag(txt,ai){
  const t=new THREE.CanvasTexture(c);const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,depthTest:false,transparent:true}));
  sp.scale.set(2.2,.55,1);sp.position.set(0,2.1,0);sp.renderOrder=10;return sp;
 }
-function addTag(o){if(!o||!o.g||o.tag)return;o.tag=mkTag(o.ai?'BOT':((SAVE.g&&SAVE.g.name)||'YOU'),!!o.ai);o.g.add(o.tag)}
+function addTag(o){if(!o||!o.g||o.tag||!o.ai)return;o.tag=mkTag(o.ai?'BOT':((SAVE.g&&SAVE.g.name)||'YOU'),!!o.ai);o.g.add(o.tag)}
 document.addEventListener('click',e=>{if(e.target.closest('button,.mcard,.chip,select')){try{AUD.init();AUD.tone(640,820,.04,'sine',.08)}catch(x){}}},true);
 
 window.NET=null;
@@ -2646,7 +2646,7 @@ function netPk(v){return [+v.x.toFixed(3),+v.y.toFixed(3),+v.z.toFixed(3)]}
 function netSend(){
  if(!window.NET||!window.NET.ws||window.NET.ws.readyState!==1||!P||!W)return;
  const c=P,data={n:(SAVE.g&&SAVE.g.name)||'PLAYER',c:{p:netPk(c.p),v:netPk(c.v),F:netPk(c.F),U:netPk(c.U),R:netPk(c.R),bo:!!c.boosting,g:!!c.grounded}};
- if(window.NET.host){if(W.ball)data.b={p:netPk(W.ball.p),v:netPk(W.ball.v)};data.sc=[scoreB,scoreO];data.clk=clock}
+ if(window.NET.host){if(W.ball)data.b={p:netPk(W.ball.p),v:netPk(W.ball.v),w:netPk(W.ball.w)};data.sc=[scoreB,scoreO];data.clk=clock}
  window.NET.ws.send(JSON.stringify({type:'state',data}));
 }
 setInterval(netSend,66);
@@ -2664,8 +2664,12 @@ function netApply(W,dt){
   rc.v.set(ca.v[0],ca.v[1],ca.v[2]);rc.F.set(ca.F[0],ca.F[1],ca.F[2]);rc.U.set(ca.U[0],ca.U[1],ca.U[2]);rc.R.set(ca.R[0],ca.R[1],ca.R[2]);
   rc.boosting=!!ca.bo;rc.grounded=!!ca.g}
  if(!window.NET.host&&a.b&&b.b){const ball=W.ball;
-  ball.p.set(L(a.b.p[0],b.b.p[0]),L(a.b.p[1],b.b.p[1]),L(a.b.p[2],b.b.p[2]));
-  ball.v.set(a.b.v[0],a.b.v[1],a.b.v[2])}
+  const tx=L(a.b.p[0],b.b.p[0]),ty=L(a.b.p[1],b.b.p[1]),tz=L(a.b.p[2],b.b.p[2]);
+  const dx=tx-ball.p.x,dy=ty-ball.p.y,dz=tz-ball.p.z;
+  if(Math.hypot(dx,dy,dz)>2.5){ball.p.set(tx,ty,tz);ball.v.set(a.b.v[0],a.b.v[1],a.b.v[2]);if(a.b.w)ball.w.set(a.b.w[0],a.b.w[1],a.b.w[2])}
+  else{const k=Math.min(1,dt*4);ball.p.set(ball.p.x+dx*k,ball.p.y+dy*k,ball.p.z+dz*k);
+   ball.v.set(ball.v.x+(a.b.v[0]-ball.v.x)*k,ball.v.y+(a.b.v[1]-ball.v.y)*k,ball.v.z+(a.b.v[2]-ball.v.z)*k)}
+ }
  if(!window.NET.host&&window.NET.hs){clock=window.NET.hs.clk;scoreB=window.NET.hs.sc[1];scoreO=window.NET.hs.sc[0]}
  if(a.n&&window.NET.name!==a.n){window.NET.name=a.n;const o=carObjs[1];if(o&&o.g){if(o.tag)o.g.remove(o.tag);o.tag=mkTag(a.n,false);o.g.add(o.tag)}}
 }
@@ -2679,7 +2683,10 @@ function startOnlineMatch(ws,host,map,kind){
  const prev=SAVE.last.size,prevT=SAVE.last.theme;SAVE.last.size=1;SAVE.last.theme=Math.max(0,THEMES.findIndex(t=>t.n===map));
  try{startGame('match')}finally{SAVE.last.size=prev;SAVE.last.theme=prevT}
  const rc=W.cars[1];
- if(rc){rc.remote=true;rc.ai=null;rc.assist=false}
+ if(rc){rc.remote=true;rc.ai=null;rc.assist=false;rc.team=host?1:0}
+ if(P)P.team=host?0:1;
+ B=null;
+ kickoff(W);
  const o=carObjs[1];if(o&&o.g){if(o.tag)o.g.remove(o.tag);o.tag=mkTag('OPPONENT',false);o.g.add(o.tag)}
  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}
   if(!window.NET||window.NET.ws!==ws)return;
