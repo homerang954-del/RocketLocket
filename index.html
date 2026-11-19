@@ -2105,7 +2105,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden&&(state==='
 function onGoal(team){
  if(team===0){scoreB++;P.stats.goals++;addXP(60);if(mode==='match'){SAVE.credits+=8;save()}}else{scoreO++}
  lastKph=Math.round(W.ball.v.len()*3.6);
- state='goal';recFrozen=true;goalT=3.4;timeScale=.25;
+ state='goal';recFrozen=true;if(window.NET){window.NET.skipMe=false;window.NET.skipPeer=false}goalT=3.4;timeScale=.25;
  const b=W.ball;splashFx(SAVE.splash,b.p.x,b.p.y,b.p.z);goalBlast(SAVE.splash,b.p.x,b.p.y,b.p.z);
  AUD.goal();playClip(SFX_GOAL,1,splashRate());vib([80,60,120]);
  popup('GOAL!',(team===0?(SAVE.g.name||'YOU')+' SCORED':'OPPONENT SCORED')+' · '+lastKph+' KPH',team===0?'#4aa6ff':'#ff9a3a',true);
@@ -2202,14 +2202,14 @@ function goalBlast(id,x,y,z){
 }
 function goalSimple(team){ // free play and training: no score, just the goal moment
  lastKph=Math.round(W.ball.v.len()*3.6);
- state='goal';recFrozen=true;goalT=2.2;timeScale=.25;
+ state='goal';recFrozen=true;if(window.NET){window.NET.skipMe=false;window.NET.skipPeer=false}goalT=2.2;timeScale=.25;
  const b=W.ball;splashFx(SAVE.splash,b.p.x,b.p.y,b.p.z);goalBlast(SAVE.splash,b.p.x,b.p.y,b.p.z);AUD.goal();playClip(SFX_GOAL,1,splashRate());vib([80,60,120]);
  popup('GOAL!',lastKph+' KPH','#fff',true);
 }
 let rSpeed=.7,rPaused=false;
 function setRSpeed(v){rSpeed=v;document.querySelectorAll('#rbar .rsp b').forEach(b=>b.classList.toggle('on',+b.dataset.s===v))}
 function startReplay(){
- if(window.NET){window.NET.skipMe=false;window.NET.skipPeer=false;setTimeout(()=>{if(typeof updSkip==='function')updSkip()},0)}
+ if(window.NET){window.NET.skipMe=false;setTimeout(()=>{if(typeof updSkip==='function')updSkip()},0)}
  const onl=!!window.NET;const pz=document.getElementById('rPause'),sp=document.querySelector('#rbar .rsp');if(pz)pz.style.display=onl?'none':'';if(sp)sp.style.display=onl?'none':'';
  if(REC.length<30){afterGoal();return}
  state='replay';rIdx=Math.max(0,REC.length-240);rPaused=false;$('rbar').classList.remove('hidden');$('rPause').textContent='PAUSE';setRSpeed(.7);
