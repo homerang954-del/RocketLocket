@@ -2105,7 +2105,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden&&(state==='
 function onGoal(team){
  if(team===0){scoreB++;P.stats.goals++;addXP(60);if(mode==='match'){SAVE.credits+=8;save()}}else{scoreO++}
  lastKph=Math.round(W.ball.v.len()*3.6);
- state='goal';recFrozen=true;if(window.NET){window.NET.skipMe=false;window.NET.skipPeer=false}goalT=3.4;timeScale=.25;
+ state='goal';recFrozen=true;if(window.NET){window.NET.skipMe=false;window.NET.skipN=0;try{window.NET.ws.send(JSON.stringify({type:'skipreset'}))}catch(e){}}goalT=3.4;timeScale=.25;
  const b=W.ball;splashFx(SAVE.splash,b.p.x,b.p.y,b.p.z);goalBlast(SAVE.splash,b.p.x,b.p.y,b.p.z);
  AUD.goal();playClip(SFX_GOAL,1,splashRate());vib([80,60,120]);
  popup('GOAL!',(team===0?(SAVE.g.name||'YOU')+' SCORED':'OPPONENT SCORED')+' · '+lastKph+' KPH',team===0?'#4aa6ff':'#ff9a3a',true);
@@ -2202,7 +2202,7 @@ function goalBlast(id,x,y,z){
 }
 function goalSimple(team){ // free play and training: no score, just the goal moment
  lastKph=Math.round(W.ball.v.len()*3.6);
- state='goal';recFrozen=true;if(window.NET){window.NET.skipMe=false;window.NET.skipPeer=false}goalT=2.2;timeScale=.25;
+ state='goal';recFrozen=true;if(window.NET){window.NET.skipMe=false;window.NET.skipN=0;try{window.NET.ws.send(JSON.stringify({type:'skipreset'}))}catch(e){}}goalT=2.2;timeScale=.25;
  const b=W.ball;splashFx(SAVE.splash,b.p.x,b.p.y,b.p.z);goalBlast(SAVE.splash,b.p.x,b.p.y,b.p.z);AUD.goal();playClip(SFX_GOAL,1,splashRate());vib([80,60,120]);
  popup('GOAL!',lastKph+' KPH','#fff',true);
 }
@@ -2234,13 +2234,11 @@ $('rPause').addEventListener('click',()=>{rPaused=!rPaused;$('rPause').textConte
 $('rBack').addEventListener('click',()=>{rIdx=Math.max(0,rIdx-60);renderFrame(Math.floor(rIdx))});
 const RCAMS=['ORBIT','SIDE','HIGH'];CS.rcam=0;
 $('rCam').addEventListener('click',()=>{CS.rcam=(CS.rcam+1)%RCAMS.length;$('rCam').textContent='CAM: '+RCAMS[CS.rcam]});
-function updSkip(){const b=$('rSkip');if(!b||!window.NET)return;const n=(window.NET.skipMe?1:0)+(window.NET.skipPeer?1:0);b.innerHTML='SKIP &#9654;&#9654; '+n+'/2'}
-function endSkip(){if(window.NET){window.NET.skipMe=false;window.NET.skipPeer=false}endReplayNow()}
+function updSkip(){const b=$('rSkip');if(!b||!window.NET)return;const n=window.NET.skipN||0;b.innerHTML='SKIP &#9654;&#9654; '+n+'/2'}
+function endSkip(){if(window.NET){window.NET.skipMe=false;window.NET.skipN=0;try{window.NET.ws.send(JSON.stringify({type:'skipreset'}))}catch(e){}}endReplayNow()}
 $('rSkip').addEventListener('click',()=>{if(state!=='replay')return;
  if(!window.NET){endReplayNow();return}
- if(window.NET.skipMe)return;
- window.NET.skipMe=true;try{window.NET.ws.send(JSON.stringify({type:'skip'}))}catch(e){}
- if(window.NET.skipPeer)endSkip();else updSkip();});
+ try{window.NET.ws.send(JSON.stringify({type:'skip'}))}catch(e){}});
 $('freeGo').addEventListener('click',()=>startGame('free'));
 function recordFrame(){
  if(recFrozen)return;
@@ -2659,7 +2657,7 @@ function netSend(){
  if(window.NET.host){if(W.ball)data.b={p:netPk(W.ball.p),v:netPk(W.ball.v),w:netPk(W.ball.w)};data.sc=[scoreB,scoreO];data.clk=clock}
  window.NET.ws.send(JSON.stringify({type:'state',data}));
 }
-setInterval(netSend,33);
+setInterval(netSend,25);
 function netApply(W,dt){
  const NT=window.NET;
  if(!NT||!NT.buf||!NT.buf.length)return;
@@ -2687,11 +2685,14 @@ function netApply(W,dt){
 }
 window.netApply=netApply;
 function netStop(){
+ document.body.classList.remove('onl');
  if(!window.NET)return;const ws=window.NET.ws;window.NET=null;try{ws&&ws.close()}catch(e){}
 }
 function startOnlineMatch(ws,host,map,kind){
  netStop();
  window.NET={ws,host,buf:[],hs:null,name:null,gone:false,kind:kind||'Unranked',scored:false};
+ if(!document.getElementById('onlCss')){const cs=document.createElement('style');cs.id='onlCss';cs.textContent='body.onl #rstBtn{display:none!important}';document.head.appendChild(cs)}
+ document.body.classList.add('onl');
  const prev=SAVE.last.size,prevT=SAVE.last.theme;SAVE.last.size=1;SAVE.last.theme=Math.max(0,THEMES.findIndex(t=>t.n===map));
  try{startGame('match')}finally{SAVE.last.size=prev;SAVE.last.theme=prevT}
  const rc=W.cars[1];
@@ -2702,7 +2703,7 @@ function startOnlineMatch(ws,host,map,kind){
  const o=carObjs[1];if(o&&o.g){if(o.tag)o.g.remove(o.tag);o.tag=mkTag('OPPONENT',false);o.g.add(o.tag)}
  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}
   if(!window.NET||window.NET.ws!==ws)return;
-  if(m.type==='skip'){window.NET.skipPeer=true;if(window.NET.skipMe&&state==='replay')endSkip();else updSkip();return}
+  if(m.type==='skipcount'){window.NET.skipN=m.n;updSkip();if(m.n>=2){window.NET.skipN=0;if(state==='replay')endReplayNow()}return}
   if(m.type==='state'){const d=m.data;window.NET.buf.push({t:performance.now(),c:d.c,b:d.b,n:d.n});if(window.NET.buf.length>60)window.NET.buf.shift();
     if(!window.NET.host&&d.sc)window.NET.hs={sc:d.sc,clk:d.clk}}
   if(m.type==='left'){window.NET.gone=true;popup('OPPONENT LEFT','','#ff8a1f',true)}
