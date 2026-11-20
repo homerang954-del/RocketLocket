@@ -2711,9 +2711,10 @@ function netApply(W,dt){
  if(tt<last.t){a=buf[0];b=buf[0];for(let i=buf.length-1;i>0;i--){if(buf[i-1].t<=tt){a=buf[i-1];b=buf[i];f=(tt-a.t)/Math.max(1,b.t-a.t);break}}}
  const L=(x,y)=>x+(y-x)*Math.min(1,Math.max(0,f));
  const ex=tt>last.t?Math.min(.15,(tt-last.t)/1000):0;
+ const exC=NT.host?Math.min(.2,(performance.now()-last.t)/1000+.04):ex;
  const rc=W.cars[1];
  if(rc&&rc.remote&&a.c){const ca=a.c,cb=b.c||ca;
-  const tx=L(ca.p[0],cb.p[0])+ca.v[0]*ex,ty=L(ca.p[1],cb.p[1])+ca.v[1]*ex,tz=L(ca.p[2],cb.p[2])+ca.v[2]*ex;
+  const tx=(NT.host?ca.p[0]:L(ca.p[0],cb.p[0]))+ca.v[0]*exC,ty=(NT.host?ca.p[1]:L(ca.p[1],cb.p[1]))+ca.v[1]*exC,tz=(NT.host?ca.p[2]:L(ca.p[2],cb.p[2]))+ca.v[2]*exC;
   const dx=tx-rc.p.x,dy=ty-rc.p.y,dz=tz-rc.p.z,k=Math.min(1,dt*25);
   if(Math.hypot(dx,dy,dz)>3)rc.p.set(tx,ty,tz);else rc.p.set(rc.p.x+dx*k,rc.p.y+dy*k,rc.p.z+dz*k);
   rc.v.set(ca.v[0],ca.v[1],ca.v[2]);rc.F.set(ca.F[0],ca.F[1],ca.F[2]);rc.U.set(ca.U[0],ca.U[1],ca.U[2]);rc.R.set(ca.R[0],ca.R[1],ca.R[2]);
@@ -2721,7 +2722,7 @@ function netApply(W,dt){
  if(!NT.host&&a.b&&b.b){const ball=W.ball;
   const tx=L(a.b.p[0],b.b.p[0])+a.b.v[0]*ex,ty=L(a.b.p[1],b.b.p[1])+a.b.v[1]*ex,tz=L(a.b.p[2],b.b.p[2])+a.b.v[2]*ex;
   const dx=tx-ball.p.x,dy=ty-ball.p.y,dz=tz-ball.p.z;
-  if(Math.hypot(dx,dy,dz)>6){ball.p.set(tx,ty,tz);ball.v.set(a.b.v[0],a.b.v[1],a.b.v[2]);if(a.b.w)ball.w.set(a.b.w[0],a.b.w[1],a.b.w[2])}
+  if(Math.hypot(dx,dy,dz)>10){ball.p.set(tx,ty,tz);ball.v.set(a.b.v[0],a.b.v[1],a.b.v[2]);if(a.b.w)ball.w.set(a.b.w[0],a.b.w[1],a.b.w[2])}
   else{}
  }
  if(!NT.host&&NT.hs){clock=NT.hs.clk;scoreB=NT.hs.sc[1];scoreO=NT.hs.sc[0]}
